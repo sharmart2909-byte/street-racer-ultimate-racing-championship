@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Street Racer: Ultimate Racing Championship</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏎️</text></svg>">
+  <link rel="stylesheet" href="./style.css" />
+  <!-- Google Fonts for sleek racing typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="game-container">
+    <!-- 3D Canvas will be injected here by Three.js -->
+    <div id="canvas-wrapper"></div>
+
+    <!-- Speed Warp Lines Overlay for Nitro / High Speed -->
+    <canvas id="speed-lines-canvas"></canvas>
+
+    <!-- IN-GAME HUD -->
+    <div id="hud" class="overlay-screen hidden">
+      <!-- Top Bar: Progress, Time, Position -->
+      <div class="hud-top-bar">
+        <div class="hud-glass-panel hud-level-info">
+          <span class="hud-label">TRACK</span>
+          <span id="hud-track-name" class="hud-value neon-cyan">ROOKIE RUSH</span>
+          <span id="hud-lap-info" class="hud-badge">LAP 1/1</span>
+        </div>
+
+        <div class="hud-glass-panel hud-timer-panel">
+          <span class="hud-label">TIME REMAINING</span>
+          <span id="hud-timer" class="hud-value neon-amber">01:10.00</span>
+          <div class="hud-sub-metric">
+            <span>LIMIT: <b id="hud-target-time">01:10.00</b></span>
+          </div>
+        </div>
+
+        <div class="hud-glass-panel hud-elapsed-panel">
+          <span class="hud-label">ELAPSED TIME</span>
+          <span id="hud-elapsed-time" class="hud-value neon-cyan">00:00.00</span>
+          <div class="hud-sub-metric">
+            <span>CHECKPOINT: <b id="hud-checkpoint-count">0/6</b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Center Notifications (Checkpoints, Drift, Speed Bonus) -->
+      <div id="hud-notifications-area">
+        <div id="hud-banner" class="hud-banner hidden">CHECKPOINT!</div>
+        <div id="hud-drift-banner" class="hud-drift-banner hidden">DRIFT +250 PTS</div>
+      </div>
+
+      <!-- Left Side: Mini-map & Damage indicator -->
+      <div class="hud-left-panel">
+        <div class="hud-glass-panel minimap-container">
+          <canvas id="minimap-canvas" width="160" height="160"></canvas>
+          <div class="minimap-legend">
+            <span class="legend-dot player"></span> You
+            <span class="legend-dot finish"></span> Finish
+          </div>
+        </div>
+        <div class="hud-glass-panel damage-container">
+          <div class="damage-header">
+            <span>VEHICLE INTEGRITY</span>
+            <span id="hud-damage-val">100%</span>
+          </div>
+          <div class="damage-bar-bg">
+            <div id="hud-damage-bar" class="damage-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Side: Action indicators (Pause, Reset prompt) -->
+      <div class="hud-right-panel">
+        <button id="btn-hud-pause" class="btn-hud-icon" title="Pause Race (Esc)">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <div class="hud-keybind-hint">Press <b>R</b> to Reset Car</div>
+      </div>
+
+      <!-- Bottom Right: Speedometer, Gear, RPM, Nitro Bar -->
+      <div class="hud-bottom-right">
+        <div class="speedometer-cluster">
+          <div class="nitro-gauge-wrap">
+            <div class="nitro-label-row">
+              <span class="nitro-title">NITRO BOOST [SHIFT]</span>
+              <span id="nitro-percent" class="nitro-pct">100%</span>
+            </div>
+            <div class="nitro-bar-track">
+              <div id="nitro-bar-fill" class="nitro-bar-fill"></div>
+            </div>
+          </div>
+
+          <div class="speed-readout-wrap">
+            <div class="speed-number-box">
+              <span id="hud-speed-val" class="speed-digits">000</span>
+              <span class="speed-unit">KM/H</span>
+            </div>
+            <div class="rpm-tachometer">
+              <div class="rpm-meter">
+                <div id="rpm-meter-fill" class="rpm-meter-fill"></div>
+              </div>
+              <div class="gear-box">
+                <span class="gear-label">GEAR</span>
+                <span id="hud-gear-val" class="gear-val">N</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOBILE TOUCH CONTROLS OVERLAY -->
+    <div id="mobile-touch-controls" class="touch-controls-layer hidden">
+      <!-- Top Secondary Bar (Camera, Reset, Pause) -->
+      <div class="touch-top-bar">
+        <button id="touch-btn-camera" class="touch-action-btn secondary-touch-btn" aria-label="Toggle Camera (C)">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3m0 8c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5m7-11h-3.17L14 4h-4L8.17 6H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2"/></svg>
+          <span>VIEW</span>
+        </button>
+        <button id="touch-btn-reset" class="touch-action-btn secondary-touch-btn" aria-label="Reset Car (R)">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          <span>RESET</span>
+        </button>
+        <button id="touch-btn-pause" class="touch-action-btn secondary-touch-btn" aria-label="Pause Race (Esc)">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          <span>PAUSE</span>
+        </button>
+      </div>
+
+      <!-- Bottom Left: Large Steering Controls -->
+      <div class="touch-cluster-left">
+        <button id="touch-btn-left" class="touch-steer-btn" aria-label="Steer Left">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+          <span>LEFT</span>
+        </button>
+        <button id="touch-btn-right" class="touch-steer-btn" aria-label="Steer Right">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          <span>RIGHT</span>
+        </button>
+      </div>
+
+      <!-- Bottom Right: Pedals & Nitro / Drift Actions -->
+      <div class="touch-cluster-right">
+        <div class="touch-action-subrow">
+          <button id="touch-btn-drift" class="touch-action-btn drift-touch-btn" aria-label="Handbrake / Drift">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            <span>DRIFT</span>
+          </button>
+          <button id="touch-btn-nitro" class="touch-action-btn nitro-touch-btn" aria-label="Nitro Boost">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+            <span>NITRO</span>
+          </button>
+        </div>
+        <div class="touch-pedals-row">
+          <button id="touch-btn-brake" class="touch-pedal-btn brake-pedal" aria-label="Brake / Reverse">
+            <span class="pedal-icon">&#9660;</span>
+            <span class="pedal-label">BRAKE</span>
+          </button>
+          <button id="touch-btn-gas" class="touch-pedal-btn gas-pedal" aria-label="Accelerate">
+            <span class="pedal-icon">&#9650;</span>
+            <span class="pedal-label">GAS</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOBILE ORIENTATION RECOMMENDATION BANNER -->
+    <div id="orientation-notice" class="orientation-banner hidden">
+      <div class="orientation-content">
+        <span class="orientation-icon">🔄</span>
+        <div class="orientation-text">
+          <b>LANDSCAPE RECOMMENDED</b>
+          <span>Rotate your device for the best wide track view & thumb controls.</span>
+        </div>
+        <button id="btn-dismiss-orientation" class="btn-dismiss-notice">CONTINUE</button>
+      </div>
+    </div>
+
+    <!-- RACE COUNTDOWN (3, 2, 1, GO!) -->
+    <div id="countdown-overlay" class="overlay-center hidden">
+      <div id="countdown-text" class="countdown-pulse">3</div>
+    </div>
+
+    <!-- MAIN MENU OVERLAY -->
+    <div id="main-menu" class="menu-overlay">
+      <div class="menu-backdrop-glow"></div>
+      
+      <div class="menu-content-center">
+        <div class="menu-logo-block">
+          <div class="logo-badge">3D BROWSER RACING</div>
+          <h1 class="game-title">STREET <span class="neon-title-accent">RACER</span></h1>
+          <h2 class="game-subtitle">ULTIMATE RACING CHAMPIONSHIP</h2>
+          <div class="title-divider"></div>
+        </div>
+
+        <div class="menu-action-buttons">
+          <button id="btn-quick-play" class="btn-neon-action primary-glow">
+            <span class="btn-glow-layer"></span>
+            <span class="btn-text">START RACE</span>
+          </button>
+          
+          <button id="btn-open-levels" class="btn-neon-action">
+            <span class="btn-text">SELECT TRACK</span>
+          </button>
+
+          <button id="btn-open-garage" class="btn-neon-action">
+            <span class="btn-text">GARAGE / CARS</span>
+          </button>
+
+          <button id="btn-open-controls" class="btn-neon-action">
+            <span class="btn-text">CONTROLS & HELP</span>
+          </button>
+
+          <button id="btn-open-settings" class="btn-neon-action">
+            <span class="btn-text">SETTINGS</span>
+          </button>
+        </div>
+
+        <div class="menu-quick-stats">
+          <div class="quick-stat-card">
+            <span class="stat-lbl">CURRENT CAR</span>
+            <span id="menu-current-car-name" class="stat-val neon-cyan">Vortex GT</span>
+          </div>
+          <div class="quick-stat-card">
+            <span class="stat-lbl">CHAMPIONSHIP PROGRESS</span>
+            <span id="menu-progress-status" class="stat-val neon-amber">Track 1 / 4 Unlocked</span>
+          </div>
+          <div class="quick-stat-card">
+            <span class="stat-lbl">SOUND FX</span>
+            <button id="btn-menu-audio-toggle" class="audio-toggle-btn">ENABLED</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-footer-bar">
+        <span>Computer Graphics Final Project &bull; Procedural 3D WebGL Engine &bull; Built with Three.js</span>
+      </div>
+    </div>
+
+    <!-- LEVEL SELECTION MODAL -->
+    <div id="level-select-modal" class="menu-modal hidden">
+      <div class="modal-box modal-wide">
+        <div class="modal-header">
+          <h2 class="modal-title">SELECT CHAMPIONSHIP TRACK</h2>
+          <button class="modal-close-btn" data-close="level-select-modal">&times;</button>
+        </div>
+        
+        <div class="track-grid" id="track-cards-container">
+          <!-- Populated dynamically: Level 1 - 4 -->
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" data-close="level-select-modal">BACK TO MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GARAGE / CAR SELECTION MODAL -->
+    <div id="garage-modal" class="menu-modal hidden">
+      <div class="modal-box modal-xl">
+        <div class="modal-header">
+          <h2 class="modal-title">RACER GARAGE & VEHICLE TUNING</h2>
+          <button class="modal-close-btn" data-close="garage-modal">&times;</button>
+        </div>
+
+        <div class="garage-layout">
+          <!-- 3D Car Preview viewport -->
+          <div class="garage-preview-viewport">
+            <div id="garage-3d-canvas-wrap"></div>
+            <div class="garage-rotate-hint">Drag or use arrows to view vehicle</div>
+          </div>
+
+          <!-- Car Specs & Selection -->
+          <div class="garage-specs-sidebar">
+            <div class="car-selector-pills" id="car-select-pills">
+              <!-- Dynamically populated car pills -->
+            </div>
+
+            <div class="car-details-card">
+              <h3 id="garage-car-name" class="car-headline neon-cyan">VORTEX GT</h3>
+              <p id="garage-car-desc" class="car-desc-text">A balanced supercar tuned for agility and steady cornering speeds.</p>
+              
+              <div class="stat-bars-container">
+                <div class="stat-row">
+                  <div class="stat-label-wrap">
+                    <span>TOP SPEED</span>
+                    <span id="stat-val-speed">240 km/h</span>
+                  </div>
+                  <div class="stat-bar-track"><div id="stat-bar-speed" class="stat-bar-fill"></div></div>
+                </div>
+
+                <div class="stat-row">
+                  <div class="stat-label-wrap">
+                    <span>ACCELERATION</span>
+                    <span id="stat-val-accel">8.5 / 10</span>
+                  </div>
+                  <div class="stat-bar-track"><div id="stat-bar-accel" class="stat-bar-fill"></div></div>
+                </div>
+
+                <div class="stat-row">
+                  <div class="stat-label-wrap">
+                    <span>HANDLING & DRIFT</span>
+                    <span id="stat-val-handling">8.0 / 10</span>
+                  </div>
+                  <div class="stat-bar-track"><div id="stat-bar-handling" class="stat-bar-fill"></div></div>
+                </div>
+
+                <div class="stat-row">
+                  <div class="stat-label-wrap">
+                    <span>NITRO CAPACITY</span>
+                    <span id="stat-val-nitro">100%</span>
+                  </div>
+                  <div class="stat-bar-track"><div id="stat-bar-nitro" class="stat-bar-fill"></div></div>
+                </div>
+              </div>
+
+              <!-- Car Color Selector -->
+              <div class="car-color-section">
+                <span class="color-section-label">PAINT FINISH:</span>
+                <div class="color-swatches" id="color-swatches">
+                  <div class="color-swatch active" data-color="crimson" style="background: #e62232;"></div>
+                  <div class="color-swatch" data-color="electric-blue" style="background: #00d2ff;"></div>
+                  <div class="color-swatch" data-color="neon-green" style="background: #39ff14;"></div>
+                  <div class="color-swatch" data-color="solar-orange" style="background: #ff7700;"></div>
+                  <div class="color-swatch" data-color="stealth-black" style="background: #111111; border: 1px solid #444;"></div>
+                  <div class="color-swatch" data-color="cyber-purple" style="background: #a800ff;"></div>
+                </div>
+              </div>
+
+              <div class="garage-action-row">
+                <button id="btn-select-car" class="btn-neon-action primary-glow">
+                  <span class="btn-text">EQUIP CAR</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" data-close="garage-modal">BACK TO MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS & HELP MODAL -->
+    <div id="controls-modal" class="menu-modal hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">CONTROLS & HOW TO PLAY</h2>
+          <button class="modal-close-btn" data-close="controls-modal">&times;</button>
+        </div>
+
+        <div class="controls-guide-grid">
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>W</kbd> or <kbd>&uarr;</kbd></span>
+            <span class="key-desc">Accelerate / Drive Forward</span>
+          </div>
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>S</kbd> or <kbd>&darr;</kbd></span>
+            <span class="key-desc">Brake / Reverse</span>
+          </div>
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>A</kbd> <kbd>D</kbd> or <kbd>&larr;</kbd> <kbd>&rarr;</kbd></span>
+            <span class="key-desc">Steer Left / Right</span>
+          </div>
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>SPACE</kbd></span>
+            <span class="key-desc">Handbrake / Initiate Drift</span>
+          </div>
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>SHIFT</kbd></span>
+            <span class="key-desc">Activate Nitro Boost</span>
+          </div>
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>R</kbd></span>
+            <span class="key-desc">Reset Car onto Track</span>
+          </div>
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>ESC</kbd></span>
+            <span class="key-desc">Pause / Resume Game</span>
+          </div>
+          <div class="control-key-item">
+            <span class="key-combo"><kbd>C</kbd></span>
+            <span class="key-desc">Change Camera View (Chase / Hood)</span>
+          </div>
+        </div>
+
+        <div class="pro-tips-box">
+          <h4>PRO RACING TIPS:</h4>
+          <ul>
+            <li>Release gas or tap brake before entering sharp hairpin corners.</li>
+            <li>Press <b>Spacebar</b> while turning at high speed to initiate tire drift! Drifting replenishes your nitro meter.</li>
+            <li>Stay off the barriers—collisions cause vehicle damage and speed loss.</li>
+            <li>Complete the course before the target time expires to unlock subsequent tracks!</li>
+          </ul>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" data-close="controls-modal">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="menu-modal hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">GAME SETTINGS</h2>
+          <button class="modal-close-btn" data-close="settings-modal">&times;</button>
+        </div>
+
+        <div class="settings-list">
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-name">Audio & Sound FX</span>
+              <span class="setting-desc">Procedural Web Audio engine sounds, collisions, nitro</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-sound" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-name">High Quality Shadows</span>
+              <span class="setting-desc">Real-time directional shadow mapping on track & cars</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-shadows" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-name">Particle Effects</span>
+              <span class="setting-desc">Tire smoke, sparks, nitro exhaust flames, and confetti</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-particles" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-name">Camera Motion Shake & Warp</span>
+              <span class="setting-desc">Dynamic speed FOV and subtle collision impacts</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-cam-shake" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item danger-zone">
+            <div class="setting-info">
+              <span class="setting-name">Reset All Progress</span>
+              <span class="setting-desc">Clear local records, unlocked tracks, and best times</span>
+            </div>
+            <button id="btn-reset-saved-data" class="btn-danger">RESET DATA</button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" data-close="settings-modal">SAVE & CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAUSE MODAL -->
+    <div id="pause-modal" class="menu-modal hidden">
+      <div class="modal-box modal-sm text-center">
+        <h2 class="modal-title">RACE PAUSED</h2>
+        <div class="pause-actions-list">
+          <button id="btn-resume-race" class="btn-neon-action primary-glow">RESUME RACE</button>
+          <button id="btn-restart-race" class="btn-neon-action">RESTART TRACK</button>
+          <button id="btn-quit-to-menu" class="btn-neon-action">EXIT TO MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RACE FINISH / RESULTS MODAL -->
+    <div id="results-modal" class="menu-modal hidden">
+      <div class="modal-box text-center">
+        <div id="results-header-banner" class="results-banner victory">
+          <h2 id="results-title" class="results-headline">VICTORY!</h2>
+          <p id="results-subtitle" class="results-subhead">Track Record Established!</p>
+        </div>
+
+        <div class="results-summary-grid">
+          <div class="result-metric-card">
+            <span class="metric-lbl">TRIAL STATUS</span>
+            <span id="result-val-pos" class="metric-val neon-magenta">WIN</span>
+          </div>
+
+          <div class="result-metric-card">
+            <span class="metric-lbl">YOUR TIME</span>
+            <span id="result-val-time" class="metric-val neon-cyan">01:05.38</span>
+          </div>
+
+          <div class="result-metric-card">
+            <span class="metric-lbl">TIME LIMIT</span>
+            <span id="result-val-target" class="metric-val">01:10.00</span>
+          </div>
+
+          <div class="result-metric-card">
+            <span class="metric-lbl">BEST TIME</span>
+            <span id="result-val-best" class="metric-val neon-amber">01:05.38</span>
+          </div>
+        </div>
+
+        <div id="results-unlock-notify" class="unlock-callout hidden">
+          🏆 <b>NEW TRACK UNLOCKED!</b> Next championship tier is now accessible.
+        </div>
+
+        <div class="results-actions-row">
+          <button id="btn-next-level" class="btn-neon-action primary-glow">NEXT TRACK</button>
+          <button id="btn-retry-level" class="btn-neon-action">TRY AGAIN</button>
+          <button id="btn-results-menu" class="btn-secondary">MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
